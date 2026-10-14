@@ -1,0 +1,8 @@
+{
+  "name": "Remix ChatShare",
+  "description": "WhatsApp-style messaging app to send pictures and documents to others with previews, captions, and instant file sharing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

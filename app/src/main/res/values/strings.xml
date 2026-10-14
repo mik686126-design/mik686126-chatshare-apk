@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">ChatShare</string>
+    <string name="tab_chats">Chats</string>
+    <string name="tab_media">Docs &amp; Media</string>
+    <string name="tab_status">Status</string>
+    <string name="search_hint">Search chats, messages, docs…</string>
+    <string name="new_chat">New Chat</string>
+    <string name="type_a_message">Type a message</string>
+    <string name="attach_document">Document</string>
+    <string name="attach_gallery">Gallery</string>
+    <string name="attach_camera">Camera</string>
+    <string name="attach_share">Send to Others</string>
+    <string name="send">Send</string>
+    <string name="online">Online</string>
+    <string name="typing">typing…</string>
+</resources>
