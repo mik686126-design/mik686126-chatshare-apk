@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -33,19 +32,30 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.SentimentSatisfiedAlt
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -66,7 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.ChatMessage
 import com.example.model.Contact
-import com.example.ui.theme.WhatsAppDarkBg
+import com.example.model.MessageType
 import com.example.ui.theme.WhatsAppDarkGreen
 import com.example.ui.theme.WhatsAppLightBg
 import com.example.ui.theme.WhatsAppLightGreen
@@ -92,6 +102,9 @@ fun ChatDetailScreen(
     var inputText by remember { mutableStateOf("") }
     var showAttachmentSheet by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+    var showDeleteContactDialog by remember { mutableStateOf(false) }
+    var selectedMessageForOptions by remember { mutableStateOf<ChatMessage?>(null) }
     val listState = rememberLazyListState()
 
     // Pick Photo from Gallery (Android Photo Picker)
@@ -208,7 +221,11 @@ fun ChatDetailScreen(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = contact.lastSeenText,
+                            text = if (contact.lastSeenText.contains("typing", ignoreCase = true)) {
+                                "typing…"
+                            } else {
+                                contact.phoneNumber
+                            },
                             color = if (contact.lastSeenText.contains("typing", ignoreCase = true)) {
                                 WhatsAppLightGreen
                             } else {
@@ -223,16 +240,7 @@ fun ChatDetailScreen(
                     Spacer(modifier = Modifier.weight(1f))
                 }
 
-                // Call Icons
-                IconButton(onClick = { /* Simulated Call */ }) {
-                    Icon(
-                        imageVector = Icons.Default.Videocam,
-                        contentDescription = "Video Call",
-                        tint = Color.White
-                    )
-                }
-
-                IconButton(onClick = { /* Simulated Call */ }) {
+                IconButton(onClick = { /* Voice Call */ }) {
                     Icon(
                         imageVector = Icons.Default.Call,
                         contentDescription = "Voice Call",
@@ -254,6 +262,7 @@ fun ChatDetailScreen(
                         onDismissRequest = { showMenu = false }
                     ) {
                         DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null, tint = WhatsAppDarkGreen) },
                             text = { Text("Send Picture") },
                             onClick = {
                                 showMenu = false
@@ -263,6 +272,7 @@ fun ChatDetailScreen(
                             }
                         )
                         DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Default.AttachFile, contentDescription = null, tint = WhatsAppDarkGreen) },
                             text = { Text("Send Document (PDF/Docs)") },
                             onClick = {
                                 showMenu = false
@@ -270,6 +280,7 @@ fun ChatDetailScreen(
                             }
                         )
                         DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = WhatsAppDarkGreen) },
                             text = { Text("Send to Others (Share App)") },
                             onClick = {
                                 showMenu = false
@@ -279,6 +290,23 @@ fun ChatDetailScreen(
                                 } else {
                                     FileUtils.shareFileToOthers(context, null, null, "Check out ChatShare app to send pictures and documents!")
                                 }
+                            }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = Color(0xFFD32F2F)) },
+                            text = { Text("Clear Chat Messages", color = Color(0xFFD32F2F)) },
+                            onClick = {
+                                showMenu = false
+                                showClearChatDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red) },
+                            text = { Text("Delete Contact & Chat", color = Color.Red) },
+                            onClick = {
+                                showMenu = false
+                                showDeleteContactDialog = true
                             }
                         )
                     }
@@ -293,42 +321,69 @@ fun ChatDetailScreen(
                 .fillMaxWidth()
                 .background(WhatsAppLightBg)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 4.dp, vertical = 6.dp)
-            ) {
-                // Info banner
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+            if (messages.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(32.dp)
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFFFFEECD),
-                            shadowElevation = 0.5.dp
-                        ) {
-                            Text(
-                                text = "🔒 Messages, pictures and documents are end-to-end encrypted.",
-                                color = Color(0xFF54656F),
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
+                        Text(
+                            text = "No messages yet",
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF54656F),
+                            fontSize = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Send a text, photo, or document to start chatting. Everything is safely stored in your phone memory.",
+                            color = Color(0xFF8696A0),
+                            fontSize = 13.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                 }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 4.dp, vertical = 6.dp)
+                ) {
+                    // Info banner
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFFFFEECD),
+                                shadowElevation = 0.5.dp
+                            ) {
+                                Text(
+                                    text = "🔒 Messages & files are stored locally in your device memory.",
+                                    color = Color(0xFF54656F),
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
 
-                items(messages, key = { it.id }) { message ->
-                    MessageBubble(
-                        message = message,
-                        onImageClick = { viewModel.previewImage(it) },
-                        onOpenDocument = { viewModel.openFile(context, it) },
-                        onShareFile = { viewModel.shareFile(context, it) }
-                    )
+                    items(messages, key = { it.id }) { message ->
+                        MessageBubble(
+                            message = message,
+                            onImageClick = { viewModel.previewImage(it) },
+                            onOpenDocument = { viewModel.openFile(context, it) },
+                            onShareFile = { viewModel.shareFile(context, it) },
+                            onMessageLongClick = { selectedMessageForOptions = it }
+                        )
+                    }
                 }
             }
         }
@@ -437,7 +492,7 @@ fun ChatDetailScreen(
                                 viewModel.sendTextMessage(contactId, inputText)
                                 inputText = ""
                             } else {
-                                // Send quick sample photo if blank
+                                // Open Gallery to send quick photo
                                 photoPickerLauncher.launch(
                                     PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
                                 )
@@ -487,6 +542,171 @@ fun ChatDetailScreen(
                     viewModel.shareFile(context, lastFileMsg)
                 } else {
                     documentPickerLauncher.launch("*/*")
+                }
+            }
+        )
+    }
+
+    // Message Actions Bottom Sheet (Delete Message, Copy, Star, Share)
+    selectedMessageForOptions?.let { message ->
+        ModalBottomSheet(
+            onDismissRequest = { selectedMessageForOptions = null },
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+            containerColor = Color.White
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = "Message Options",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    color = WhatsAppDarkGreen,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                if (message.text.isNotBlank()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.copyMessageText(context, message.text)
+                                selectedMessageForOptions = null
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color(0xFF54656F))
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Copy Text", fontSize = 15.sp, color = Color(0xFF111B21))
+                    }
+                }
+
+                if (message.fileUri != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.shareFile(context, message)
+                                selectedMessageForOptions = null
+                            }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = WhatsAppDarkGreen)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text("Share / Send to Others", fontSize = 15.sp, color = Color(0xFF111B21))
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            viewModel.toggleStar(message.id)
+                            selectedMessageForOptions = null
+                        }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (message.isStarred) Icons.Default.StarOutline else Icons.Default.Star,
+                        contentDescription = null,
+                        tint = if (message.isStarred) Color(0xFF54656F) else Color(0xFFFFB300)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = if (message.isStarred) "Unstar message" else "Star message",
+                        fontSize = 15.sp,
+                        color = Color(0xFF111B21)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            viewModel.deleteMessage(message.id)
+                            selectedMessageForOptions = null
+                        }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Delete Message", fontSize = 15.sp, color = Color.Red, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+
+    // Clear Chat History Confirmation Dialog
+    if (showClearChatDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearChatDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.DeleteSweep,
+                    contentDescription = null,
+                    tint = Color(0xFFD32F2F),
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = { Text("Clear Chat History?", fontWeight = FontWeight.Bold) },
+            text = { Text("All messages in this chat will be permanently deleted from your phone memory.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearChat(contactId)
+                        showClearChatDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Clear Messages", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearChatDialog = false }) {
+                    Text("Cancel", color = Color(0xFF54656F))
+                }
+            }
+        )
+    }
+
+    // Delete Entire Contact & Chat Dialog
+    if (showDeleteContactDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteContactDialog = false },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = Color.Red,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = { Text("Delete Contact & Chat?", fontWeight = FontWeight.Bold) },
+            text = { Text("Are you sure you want to delete ${contact?.name ?: "this contact"} and all shared pictures, documents, and chat records?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteContactDialog = false
+                        viewModel.deleteContact(contactId)
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("Delete", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteContactDialog = false }) {
+                    Text("Cancel", color = Color(0xFF54656F))
                 }
             }
         )

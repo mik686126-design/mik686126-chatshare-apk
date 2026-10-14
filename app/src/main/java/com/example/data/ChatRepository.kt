@@ -1,6 +1,9 @@
 package com.example.data
 
 import android.content.Context
+import com.example.data.local.ChatDatabase
+import com.example.data.local.ChatMessageEntity
+import com.example.data.local.ContactEntity
 import com.example.model.ChatMessage
 import com.example.model.Contact
 import com.example.model.DocumentType
@@ -10,46 +13,99 @@ import com.example.util.SampleData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 class ChatRepository(private val context: Context) {
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private val database = ChatDatabase.getDatabase(context)
+    private val contactDao = database.contactDao()
+    private val messageDao = database.chatMessageDao()
 
-    private val _contacts = MutableStateFlow<List<Contact>>(emptyList())
-    val contacts: StateFlow<List<Contact>> = _contacts.asStateFlow()
+    val contacts: StateFlow<List<Contact>> = contactDao.getAllContacts()
+        .map { list -> list.map { it.toDomain() } }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
-    private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
-    val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
+    val messages: StateFlow<List<ChatMessage>> = messageDao.getAllMessages()
+        .map { list -> list.map { it.toDomain() } }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     init {
-        SampleData.initializeSampleFiles(context)
-        _contacts.value = SampleData.getInitialContacts()
-        _messages.value = SampleData.getInitialMessages(context)
+        scope.launch {
+            if (contactDao.getContactCount() == 0) {
+                // Initialize sample files and first-time starter contacts
+                SampleData.initializeSampleFiles(context)
+                val initialContacts = SampleData.getInitialContacts().mapIndexed { index, contact ->
+                    ContactEntity.fromDomain(contact, createdAt = System.currentTimeMillis() - (index * 1000L))
+                }
+                contactDao.insertContacts(initialContacts)
+
+                val initialMessages = SampleData.getInitialMessages(context).map {
+                    ChatMessageEntity.fromDomain(it)
+                }
+                messageDao.insertMessages(initialMessages)
+            }
+        }
     }
 
     fun getContactById(contactId: String): Contact? {
-        return _contacts.value.find { it.id == contactId }
-    }
-
-    fun getMessagesForChat(chatId: String): List<ChatMessage> {
-        return _messages.value.filter { it.chatId == chatId }.sortedBy { it.timestamp }
+        return contacts.value.find { it.id == contactId }
     }
 
     fun getLastMessage(chatId: String): ChatMessage? {
-        return _messages.value.filter { it.chatId == chatId }.maxByOrNull { it.timestamp }
+        return messages.value.filter { it.chatId == chatId }.maxByOrNull { it.timestamp }
     }
 
-    fun getAllMediaAndDocs(): List<ChatMessage> {
-        return _messages.value.filter { it.type == MessageType.IMAGE || it.type == MessageType.DOCUMENT }
-            .sortedByDescending { it.timestamp }
+    suspend fun addContact(name: String, phoneNumber: String, statusText: String = "Hey there! I am using ChatShare."): Contact {
+        return withContext(Dispatchers.IO) {
+            val contact = Contact(
+                id = "c_${System.currentTimeMillis()}",
+                name = name,
+                phoneNumber = phoneNumber,
+                avatarColor = listOf(0xFF00A884, 0xFF128C7E, 0xFF2196F3, 0xFF9C27B0, 0xFFFF9800, 0xFFE91E63).random(),
+                statusText = statusText.ifBlank { "Hey there! I am using ChatShare." },
+                isOnline = true,
+                lastSeenText = "Online",
+                isPinned = false,
+                unreadCount = 0
+            )
+            contactDao.insertContact(ContactEntity.fromDomain(contact, createdAt = System.currentTimeMillis()))
+            contact
+        }
     }
 
-    fun sendMessage(
+    suspend fun deleteContact(contactId: String) {
+        withContext(Dispatchers.IO) {
+            contactDao.deleteContactById(contactId)
+            messageDao.deleteMessagesByChatId(contactId)
+        }
+    }
+
+    suspend fun clearChatMessages(chatId: String) {
+        withContext(Dispatchers.IO) {
+            messageDao.deleteMessagesByChatId(chatId)
+        }
+    }
+
+    suspend fun deleteMessage(messageId: String) {
+        withContext(Dispatchers.IO) {
+            messageDao.deleteMessageById(messageId)
+        }
+    }
+
+    suspend fun toggleStar(messageId: String) {
+        withContext(Dispatchers.IO) {
+            messageDao.toggleStar(messageId)
+        }
+    }
+
+    suspend fun sendMessage(
         chatId: String,
         text: String = "",
         type: MessageType = MessageType.TEXT,
@@ -75,14 +131,16 @@ class ChatRepository(private val context: Context) {
             documentType = documentType
         )
 
-        _messages.value = _messages.value + message
+        withContext(Dispatchers.IO) {
+            messageDao.insertMessage(ChatMessageEntity.fromDomain(message))
+        }
 
-        // Animate status to Delivered and Read
+        // Animate status to Delivered and Read in database
         scope.launch {
             delay(600)
-            updateMessageStatus(message.id, MessageStatus.DELIVERED)
+            messageDao.updateMessageStatus(message.id, MessageStatus.DELIVERED.name)
             delay(800)
-            updateMessageStatus(message.id, MessageStatus.READ)
+            messageDao.updateMessageStatus(message.id, MessageStatus.READ.name)
 
             // Auto-respond from contact if not self chat
             if (chatId != "c5") {
@@ -93,20 +151,12 @@ class ChatRepository(private val context: Context) {
         return message
     }
 
-    private fun updateMessageStatus(messageId: String, newStatus: MessageStatus) {
-        _messages.value = _messages.value.map {
-            if (it.id == messageId) it.copy(status = newStatus) else it
-        }
-    }
-
     private fun simulateContactReply(chatId: String, sentType: MessageType, fileName: String?) {
-        val contact = getContactById(chatId) ?: return
-
         scope.launch {
-            // Set contact to typing...
-            _contacts.value = _contacts.value.map {
-                if (it.id == chatId) it.copy(isOnline = true, lastSeenText = "typing…") else it
-            }
+            val contact = contactDao.getContactById(chatId) ?: return@launch
+
+            // Set typing indicator
+            contactDao.updateContact(contact.copy(isOnline = true, lastSeenText = "typing…"))
 
             delay(1800)
 
@@ -146,36 +196,10 @@ class ChatRepository(private val context: Context) {
                 status = MessageStatus.READ
             )
 
-            _messages.value = _messages.value + replyMessage
+            messageDao.insertMessage(ChatMessageEntity.fromDomain(replyMessage))
 
             // Restore contact status
-            _contacts.value = _contacts.value.map {
-                if (it.id == chatId) it.copy(isOnline = true, lastSeenText = "Online") else it
-            }
+            contactDao.updateContact(contact.copy(isOnline = true, lastSeenText = "Online"))
         }
-    }
-
-    fun addContact(name: String, phoneNumber: String): Contact {
-        val newContact = Contact(
-            id = "c_${System.currentTimeMillis()}",
-            name = name,
-            phoneNumber = phoneNumber,
-            avatarColor = listOf(0xFF00A884, 0xFF128C7E, 0xFF2196F3, 0xFF9C27B0, 0xFFFF9800).random(),
-            statusText = "Hey there! I am using ChatShare.",
-            isOnline = true,
-            lastSeenText = "Online"
-        )
-        _contacts.value = listOf(newContact) + _contacts.value
-        return newContact
-    }
-
-    fun toggleStar(messageId: String) {
-        _messages.value = _messages.value.map {
-            if (it.id == messageId) it.copy(isStarred = !it.isStarred) else it
-        }
-    }
-
-    fun deleteMessage(messageId: String) {
-        _messages.value = _messages.value.filter { it.id != messageId }
     }
 }

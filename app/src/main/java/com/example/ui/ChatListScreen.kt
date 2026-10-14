@@ -1,8 +1,10 @@
 package com.example.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,13 +23,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -36,9 +40,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.TabRowDefaults
@@ -98,7 +100,7 @@ fun ChatListScreen(
                     TextField(
                         value = uiState.searchQuery,
                         onValueChange = { viewModel.setSearchQuery(it) },
-                        placeholder = { Text("Search chats, docs, photos…", color = Color.White.copy(alpha = 0.7f)) },
+                        placeholder = { Text("Search chats, numbers, docs…", color = Color.White.copy(alpha = 0.7f)) },
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -170,13 +172,15 @@ fun ChatListScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("New Chat") },
+                                leadingIcon = { Icon(Icons.Default.PersonAdd, contentDescription = null, tint = WhatsAppDarkGreen) },
+                                text = { Text("New Contact / Chat") },
                                 onClick = {
                                     showMenu = false
                                     viewModel.showNewChatDialog(true)
                                 }
                             )
                             DropdownMenuItem(
+                                leadingIcon = { Icon(Icons.Default.Description, contentDescription = null, tint = WhatsAppDarkGreen) },
                                 text = { Text("Docs & Media Vault") },
                                 onClick = {
                                     showMenu = false
@@ -272,7 +276,10 @@ fun ChatListScreen(
                     ChatsListContent(
                         contacts = contacts,
                         viewModel = viewModel,
-                        onContactClick = onContactClick
+                        onContactClick = onContactClick,
+                        onDeleteContact = { contact ->
+                            viewModel.setContactPendingDelete(contact)
+                        }
                     )
                 }
                 1 -> {
@@ -289,7 +296,7 @@ fun ChatListScreen(
                 }
             }
 
-            // WhatsApp Floating Action Button
+            // WhatsApp Floating Action Button (New Chat)
             if (uiState.selectedTab == 0) {
                 FloatingActionButton(
                     onClick = { viewModel.showNewChatDialog(true) },
@@ -302,7 +309,7 @@ fun ChatListScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
-                        contentDescription = "New Chat",
+                        contentDescription = "New Contact / Chat",
                         modifier = Modifier.size(26.dp)
                     )
                 }
@@ -310,13 +317,51 @@ fun ChatListScreen(
         }
     }
 
-    // New Chat Dialog
+    // New Contact Dialog (Saves permanently to phone storage)
     if (uiState.showNewChatDialog) {
         NewChatDialog(
             onDismiss = { viewModel.showNewChatDialog(false) },
-            onConfirm = { name, phone ->
-                viewModel.createNewContact(name, phone)
+            onConfirm = { name, phone, status ->
+                viewModel.createNewContact(name, phone, status)
                 viewModel.showNewChatDialog(false)
+            }
+        )
+    }
+
+    // Delete Contact Confirmation Dialog
+    uiState.contactPendingDelete?.let { contact ->
+        AlertDialog(
+            onDismissRequest = { viewModel.setContactPendingDelete(null) },
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = Color.Red,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                Text("Delete Chat with ${contact.name}?", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    text = "This will permanently remove this contact and delete all its chat history, pictures, and documents from your device memory.",
+                    color = Color(0xFF54656F),
+                    fontSize = 14.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.deleteContact(contact.id) },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Delete Chat", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.setContactPendingDelete(null) }) {
+                    Text("Cancel", color = Color(0xFF54656F))
+                }
             }
         )
     }
@@ -326,18 +371,32 @@ fun ChatListScreen(
 fun ChatsListContent(
     contacts: List<Contact>,
     viewModel: ChatViewModel,
-    onContactClick: (String) -> Unit
+    onContactClick: (String) -> Unit,
+    onDeleteContact: (Contact) -> Unit
 ) {
     if (contacts.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "No chats found",
-                color = Color.Gray,
-                fontSize = 16.sp
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Text(
+                    text = "No saved contacts found",
+                    color = Color.Gray,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Tap the + button below to add a new contact or phone number.",
+                    color = Color(0xFF8696A0),
+                    fontSize = 13.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+            }
         }
     } else {
         LazyColumn(
@@ -349,7 +408,8 @@ fun ChatsListContent(
                 ChatItemRow(
                     contact = contact,
                     lastMessage = lastMessage,
-                    onClick = { onContactClick(contact.id) }
+                    onClick = { onContactClick(contact.id) },
+                    onDelete = { onDeleteContact(contact) }
                 )
                 HorizontalDivider(
                     thickness = 0.5.dp,
@@ -361,146 +421,169 @@ fun ChatsListContent(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatItemRow(
     contact: Contact,
     lastMessage: com.example.model.ChatMessage?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .testTag("chat_item_${contact.id}"),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        ContactAvatar(
-            name = contact.name,
-            avatarColor = contact.avatarColor,
-            sizeDp = 50,
-            isOnline = contact.isOnline
-        )
+    var showItemMenu by remember { mutableStateOf(false) }
 
-        Spacer(modifier = Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = contact.name,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 16.sp,
-                    color = Color(0xFF111B21),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+    Box {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { onClick() },
+                    onLongClick = { showItemMenu = true }
                 )
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .testTag("chat_item_${contact.id}"),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ContactAvatar(
+                name = contact.name,
+                avatarColor = contact.avatarColor,
+                sizeDp = 50,
+                isOnline = contact.isOnline
+            )
 
-                if (lastMessage != null) {
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = FileUtils.formatTime(lastMessage.timestamp),
-                        fontSize = 12.sp,
-                        color = if (contact.unreadCount > 0) WhatsAppLightGreen else Color(0xFF667781)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(3.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (lastMessage != null) {
-                    if (lastMessage.isFromMe) {
-                        StatusTicks(
-                            status = lastMessage.status,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    }
-
-                    // Icon for photo or document
-                    when (lastMessage.type) {
-                        MessageType.IMAGE -> {
-                            Icon(
-                                imageVector = Icons.Default.Image,
-                                contentDescription = "Photo",
-                                tint = Color(0xFF667781),
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .padding(end = 4.dp)
-                            )
-                        }
-                        MessageType.DOCUMENT -> {
-                            Icon(
-                                imageVector = Icons.Default.Description,
-                                contentDescription = "Document",
-                                tint = Color(0xFF667781),
-                                modifier = Modifier
-                                    .size(16.dp)
-                                    .padding(end = 4.dp)
-                            )
-                        }
-                        else -> Unit
-                    }
-
-                    val previewText = when (lastMessage.type) {
-                        MessageType.IMAGE -> if (lastMessage.text.isNotBlank()) lastMessage.text else "Photo"
-                        MessageType.DOCUMENT -> lastMessage.fileName ?: "Document"
-                        MessageType.TEXT -> lastMessage.text
-                    }
-
-                    Text(
-                        text = previewText,
-                        fontSize = 14.sp,
-                        color = Color(0xFF667781),
+                        text = contact.name,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 16.sp,
+                        color = Color(0xFF111B21),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                } else {
-                    Text(
-                        text = contact.statusText,
-                        fontSize = 14.sp,
-                        color = Color(0xFF667781),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
 
-                if (contact.isPinned) {
-                    Icon(
-                        imageVector = Icons.Default.PushPin,
-                        contentDescription = "Pinned",
-                        tint = Color(0xFF8696A0),
-                        modifier = Modifier
-                            .size(16.dp)
-                            .padding(start = 6.dp)
-                    )
-                }
-
-                if (contact.unreadCount > 0) {
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 6.dp)
-                            .clip(CircleShape)
-                            .background(WhatsAppLightGreen)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
+                    if (lastMessage != null) {
                         Text(
-                            text = "${contact.unreadCount}",
-                            fontSize = 11.sp,
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            text = FileUtils.formatTime(lastMessage.timestamp),
+                            fontSize = 12.sp,
+                            color = if (contact.unreadCount > 0) WhatsAppLightGreen else Color(0xFF667781)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (lastMessage != null) {
+                        if (lastMessage.isFromMe) {
+                            StatusTicks(
+                                status = lastMessage.status,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                        }
+
+                        // Icon for photo or document
+                        when (lastMessage.type) {
+                            MessageType.IMAGE -> {
+                                Icon(
+                                    imageVector = Icons.Default.Image,
+                                    contentDescription = "Photo",
+                                    tint = Color(0xFF667781),
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .padding(end = 4.dp)
+                                )
+                            }
+                            MessageType.DOCUMENT -> {
+                                Icon(
+                                    imageVector = Icons.Default.Description,
+                                    contentDescription = "Document",
+                                    tint = Color(0xFF667781),
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .padding(end = 4.dp)
+                                )
+                            }
+                            else -> Unit
+                        }
+
+                        val previewText = when (lastMessage.type) {
+                            MessageType.IMAGE -> if (lastMessage.text.isNotBlank()) lastMessage.text else "Photo"
+                            MessageType.DOCUMENT -> lastMessage.fileName ?: "Document"
+                            MessageType.TEXT -> lastMessage.text
+                        }
+
+                        Text(
+                            text = previewText,
+                            fontSize = 14.sp,
+                            color = Color(0xFF667781),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    } else {
+                        Text(
+                            text = contact.phoneNumber,
+                            fontSize = 14.sp,
+                            color = Color(0xFF667781),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    if (contact.isPinned) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = "Pinned",
+                            tint = Color(0xFF8696A0),
+                            modifier = Modifier
+                                .size(16.dp)
+                                .padding(start = 6.dp)
+                        )
+                    }
+
+                    // 3-dot options button for easy delete on tap as well
+                    IconButton(
+                        onClick = { showItemMenu = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "Contact options",
+                            tint = Color(0xFF8696A0),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
+        }
+
+        DropdownMenu(
+            expanded = showItemMenu,
+            onDismissRequest = { showItemMenu = false }
+        ) {
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = WhatsAppDarkGreen) },
+                text = { Text(contact.phoneNumber) },
+                onClick = { showItemMenu = false }
+            )
+            DropdownMenuItem(
+                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red) },
+                text = { Text("Delete Chat & Contact", color = Color.Red) },
+                onClick = {
+                    showItemMenu = false
+                    onDelete()
+                }
+            )
         }
     }
 }
@@ -508,54 +591,92 @@ fun ChatItemRow(
 @Composable
 fun NewChatDialog(
     onDismiss: () -> Unit,
-    onConfirm: (name: String, phone: String) -> Unit
+    onConfirm: (name: String, phone: String, status: String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
+    var statusText by remember { mutableStateOf("") }
+    var nameError by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = "New Contact / Chat",
-                fontWeight = FontWeight.Bold,
-                color = WhatsAppDarkGreen
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.PersonAdd,
+                    contentDescription = null,
+                    tint = WhatsAppDarkGreen,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Save New Contact",
+                    fontWeight = FontWeight.Bold,
+                    color = WhatsAppDarkGreen
+                )
+            }
         },
         text = {
             Column {
+                Text(
+                    text = "This contact will be permanently saved in your phone memory.",
+                    color = Color(0xFF54656F),
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
                 OutlinedTextField(
                     value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Contact Name") },
+                    onValueChange = {
+                        name = it
+                        nameError = false
+                    },
+                    label = { Text("Contact Name *") },
+                    isError = nameError,
+                    supportingText = { if (nameError) Text("Name cannot be empty") },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("contact_name_input")
                 )
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = phone,
                     onValueChange = { phone = it },
-                    label = { Text("Phone Number or Group Title") },
+                    label = { Text("Phone Number (e.g. +92 300 1234567)") },
                     singleLine = true,
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("contact_phone_input")
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = statusText,
+                    onValueChange = { statusText = it },
+                    label = { Text("About / Status (optional)") },
+                    placeholder = { Text("Hey there! I am using ChatShare.") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (name.isNotBlank()) {
-                        onConfirm(name, phone.ifBlank { "+92 300 0000000" })
+                    if (name.isBlank()) {
+                        nameError = true
+                    } else {
+                        onConfirm(
+                            name.trim(),
+                            phone.ifBlank { "+92 300 0000000" },
+                            statusText.ifBlank { "Hey there! I am using ChatShare." }
+                        )
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = WhatsAppDarkGreen),
                 modifier = Modifier.testTag("start_chat_btn")
             ) {
-                Text("Start Chat")
+                Text("Save & Chat", color = Color.White)
             }
         },
         dismissButton = {

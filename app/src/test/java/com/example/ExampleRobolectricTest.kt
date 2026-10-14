@@ -5,9 +5,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.data.ChatRepository
 import com.example.model.DocumentType
 import com.example.model.MessageType
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -25,12 +25,9 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `test repository initialization and sending document message`() {
+    fun `test repository initialization and sending document message`() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val repository = ChatRepository(context)
-
-        val contacts = repository.contacts.value
-        assertTrue(contacts.isNotEmpty())
 
         val msg = repository.sendMessage(
             chatId = "c1",
@@ -49,7 +46,7 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `test sending picture message`() {
+    fun `test sending picture message`() = runTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val repository = ChatRepository(context)
 

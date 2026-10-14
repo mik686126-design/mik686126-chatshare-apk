@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.OpenInNew
@@ -254,7 +255,8 @@ fun DocsMediaScreen(
                         onOpen = { viewModel.openFile(context, item) },
                         onShare = { viewModel.shareFile(context, item) },
                         onPreviewImage = { viewModel.previewImage(item) },
-                        onGoToChat = { onOpenChat(item.chatId) }
+                        onGoToChat = { onOpenChat(item.chatId) },
+                        onDelete = { viewModel.deleteMessage(item.id) }
                     )
                 }
             }
@@ -268,7 +270,8 @@ fun MediaVaultCard(
     onOpen: () -> Unit,
     onShare: () -> Unit,
     onPreviewImage: () -> Unit,
-    onGoToChat: () -> Unit
+    onGoToChat: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -361,14 +364,14 @@ fun MediaVaultCard(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Actions: Open, Send to Others, Go to Chat
+            // Actions: Open, Send to Others, Go to Chat, Delete
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onShare,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
                         .background(WhatsAppDarkGreen)
                 ) {
@@ -376,16 +379,16 @@ fun MediaVaultCard(
                         imageVector = Icons.Default.Share,
                         contentDescription = "Send to Others like WhatsApp",
                         tint = Color.White,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(5.dp))
 
                 IconButton(
                     onClick = onGoToChat,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFE9EDEF))
                 ) {
@@ -393,7 +396,24 @@ fun MediaVaultCard(
                         imageVector = Icons.Default.Chat,
                         contentDescription = "Go to Chat",
                         tint = Color(0xFF54656F),
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(5.dp))
+
+                IconButton(
+                    onClick = onDelete,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFEBEE))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete from vault",
+                        tint = Color(0xFFD32F2F),
+                        modifier = Modifier.size(17.dp)
                     )
                 }
             }

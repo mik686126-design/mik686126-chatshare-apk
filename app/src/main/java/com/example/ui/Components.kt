@@ -3,8 +3,10 @@ package com.example.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -159,12 +162,14 @@ fun StatusTicks(status: MessageStatus, modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MessageBubble(
     message: ChatMessage,
     onImageClick: (ChatMessage) -> Unit,
     onOpenDocument: (ChatMessage) -> Unit,
     onShareFile: (ChatMessage) -> Unit,
+    onMessageLongClick: (ChatMessage) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isFromMe = message.isFromMe
@@ -185,7 +190,16 @@ fun MessageBubble(
             shape = bubbleShape,
             color = bubbleColor,
             shadowElevation = 1.dp,
-            modifier = Modifier.widthIn(min = 90.dp, max = 320.dp)
+            modifier = Modifier
+                .widthIn(min = 90.dp, max = 320.dp)
+                .combinedClickable(
+                    onClick = {
+                        if (message.type == MessageType.TEXT) {
+                            onMessageLongClick(message)
+                        }
+                    },
+                    onLongClick = { onMessageLongClick(message) }
+                )
         ) {
             Column(
                 modifier = Modifier.padding(6.dp)
@@ -275,13 +289,24 @@ fun MessageBubble(
                     }
                 }
 
-                // Timestamp & Status Row
+                // Timestamp, Star & Status Row
                 Row(
                     modifier = Modifier
                         .align(Alignment.End)
                         .padding(top = 2.dp, end = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    if (message.isStarred) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Starred",
+                            tint = Color(0xFFFFB300),
+                            modifier = Modifier
+                                .size(13.dp)
+                                .padding(end = 3.dp)
+                        )
+                    }
+
                     Text(
                         text = FileUtils.formatTime(message.timestamp),
                         color = Color(0xFF667781),
