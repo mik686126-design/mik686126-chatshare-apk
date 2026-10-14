@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account and profile details registered in ChatShare.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Auth UID of the user." },
+        "displayName": { "type": "string", "description": "Display name of the user." },
+        "phoneNumber": { "type": "string", "description": "Phone number for finding contacts." },
+        "email": { "type": "string", "description": "Account email address." },
+        "statusText": { "type": "string", "description": "About / Status text." },
+        "avatarColor": { "type": "number", "description": "Avatar background color int." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "displayName", "phoneNumber"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Conversation between two users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique chat ID." },
+        "participants": { "type": "array", "description": "UIDs of participants." },
+        "participantPhones": { "type": "array", "description": "Phone numbers of participants." },
+        "lastMessageText": { "type": "string", "description": "Preview of last message." },
+        "lastMessageType": { "type": "string", "description": "TEXT, IMAGE, or DOCUMENT." },
+        "lastMessageSenderId": { "type": "string", "description": "UID of last sender." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "participants"]
+    },
+    "CloudMessage": {
+      "title": "CloudMessage",
+      "description": "Message, picture or document sent in a chat.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Message ID." },
+        "chatId": { "type": "string", "description": "Chat ID." },
+        "senderId": { "type": "string", "description": "UID of sender." },
+        "senderName": { "type": "string", "description": "Sender display name." },
+        "text": { "type": "string", "description": "Message text or caption." },
+        "type": { "type": "string", "description": "TEXT, IMAGE, or DOCUMENT." },
+        "fileData": { "type": "string", "description": "Optional inline data / URI." },
+        "fileName": { "type": "string", "description": "File name." },
+        "fileSizeBytes": { "type": "number", "description": "File size." },
+        "mimeType": { "type": "string", "description": "MIME type." },
+        "documentType": { "type": "string", "description": "Document type." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "chatId", "senderId", "text", "type"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles indexed by UID and queried by phone number."
+    },
+    "/chats/{chatId}": {
+      "schema": "Chat",
+      "description": "Chat threads between users."
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "CloudMessage",
+      "description": "Messages sent within a chat."
+    }
+  }
+}

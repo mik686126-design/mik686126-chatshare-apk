@@ -20,6 +20,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Clear
@@ -185,6 +187,23 @@ fun ChatListScreen(
                                 onClick = {
                                     showMenu = false
                                     viewModel.setSelectedTab(1)
+                                }
+                            )
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                leadingIcon = { Icon(Icons.Default.AccountCircle, contentDescription = null, tint = WhatsAppDarkGreen) },
+                                text = { Text("My Profile / Number") },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.showProfileSetupDialog(true)
+                                }
+                            )
+                            DropdownMenuItem(
+                                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = Color.Red) },
+                                text = { Text("Sign Out", color = Color.Red) },
+                                onClick = {
+                                    showMenu = false
+                                    viewModel.signOut()
                                 }
                             )
                         }

@@ -189,4 +189,41 @@ object FileUtils {
             else -> SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(timestamp))
         }
     }
+
+    fun encodeFileToBase64(filePath: String): String? {
+        return try {
+            val file = File(filePath)
+            if (!file.exists() || file.length() > 800 * 1024L) return null // Max 800KB for inline Firestore
+            val bytes = file.readBytes()
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun saveBase64ToAppStorage(context: Context, base64Str: String, fileName: String, isImage: Boolean): StoredFileInfo? {
+        return try {
+            val bytes = android.util.Base64.decode(base64Str, android.util.Base64.DEFAULT)
+            val subFolder = if (isImage) "pictures" else "documents"
+            val targetDir = File(context.filesDir, subFolder).apply { if (!exists()) mkdirs() }
+            val targetFile = File(targetDir, "${System.currentTimeMillis()}_$fileName")
+            FileOutputStream(targetFile).use { it.write(bytes) }
+
+            val ext = fileName.substringAfterLast('.', "")
+            val docType = if (isImage) DocumentType.IMAGE else DocumentType.fromExtension(ext)
+            val mimeType = getMimeType(fileName)
+
+            StoredFileInfo(
+                internalUriString = targetFile.absolutePath,
+                fileName = fileName,
+                fileSizeBytes = targetFile.length(),
+                mimeType = mimeType,
+                documentType = docType
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
 }
